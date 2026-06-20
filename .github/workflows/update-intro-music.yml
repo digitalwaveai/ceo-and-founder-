@@ -1,0 +1,51 @@
+name: Update intro music
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/update-intro-music.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update-music:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download and trim Pixabay track
+        run: |
+          set -euo pipefail
+          curl -L --fail \
+            -A "Mozilla/5.0" \
+            -e "https://pixabay.com/" \
+            -o /tmp/high-end-hustle.mp3 \
+            "https://pixabay.com/music/download/id-253184.mp3"
+          ffmpeg -y -i /tmp/high-end-hustle.mp3 \
+            -t 9 \
+            -af "afade=t=out:st=8:d=1" \
+            -c:a libmp3lame -b:a 192k \
+            intro-music.mp3
+
+      - name: Update intro timing only
+        run: |
+          set -euo pipefail
+          sed -i 's/const INTRO_AUDIO_START = 50;/const INTRO_AUDIO_START = 0;/' script.js
+          sed -i 's/const INTRO_AUDIO_END = 64;/const INTRO_AUDIO_END = 9;/' script.js
+          sed -i 's/const fadeAudioOut = (duration = 1900)/const fadeAudioOut = (duration = 1000)/' script.js
+          sed -i 's/fadeAudioOut(1900);/fadeAudioOut(1000);/' script.js
+          sed -i 's/window.setTimeout(skipIntro, 13200)/window.setTimeout(skipIntro, 8000)/' script.js
+
+      - name: Commit music update and remove temporary workflow
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/update-intro-music.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add intro-music.mp3 script.js .github/workflows/update-intro-music.yml
+          git commit -m "Update intro music and timing"
+          git push
